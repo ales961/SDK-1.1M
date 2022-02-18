@@ -143,46 +143,49 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    state = GPIO_PIN_SET;
-		while (state == GPIO_PIN_SET) {
-			state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15);
-		}
-		HAL_Delay(500);
+   	state = GPIO_PIN_SET;
+	while (state == GPIO_PIN_SET) {
 		state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15);
-		if (state == GPIO_PIN_SET) {
-			if (lower == 0) {
-				lower = 1;
-				set_lights(&lower, &higher);
-			} else if (higher == 0) {
-				lower = 0;
-				higher = 1;
-				set_lights(&lower, &higher);
-			} else if (higher == 1) {
-				lower = 0;
-				higher = 0;
-				overflow += 1;
-				set_lights(&lower, &higher);
-				HAL_Delay(500);
-				signalize(&overflow);
+	}
+	state = GPIO_PIN_RESET;
+	int start = HAL_GetTick();
+	while (state == GPIO_PIN_RESET) {
+		state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15);
+	}
+	int end = HAL_GetTick();
+	if ((end-start) < 1000) {
+		if (lower == 0) {
+			lower = 1;
+			set_lights(&lower, &higher);
+		} else if (higher == 0) {
+			lower = 0;
+			higher = 1;
+			set_lights(&lower, &higher);
+		} else if (higher == 1) {
+			lower = 0;
+			higher = 0;
+			overflow += 1;
+			set_lights(&lower, &higher);
+			HAL_Delay(500);
+			signalize(&overflow);
 			}
-		} else {
-			if (lower == 1) {
-				lower = 0;
-				set_lights(&lower, &higher);
-			} else if (higher == 1) {
-				lower = 1;
-				higher = 0;
-				set_lights(&lower, &higher);
-			} else if (higher == 0) {
-				lower = 1;
-				higher = 1;
-				if (overflow > 0) overflow--;
-				signalize(&overflow);
-				HAL_Delay(500);					
-				set_lights(&lower, &higher);
-			}
+	} else {
+		if (lower == 1) {
+			lower = 0;
+			set_lights(&lower, &higher);
+		} else if (higher == 1) {
+			lower = 1;
+			higher = 0;
+			set_lights(&lower, &higher);
+		} else if (higher == 0) {
+			lower = 1;
+			higher = 1;
+			if (overflow > 0) overflow--;
+			signalize(&overflow);
+			HAL_Delay(500);					
+			set_lights(&lower, &higher);
 		}
-		HAL_Delay(2000);
+	}
   /* USER CODE END 3 */
 }
 
