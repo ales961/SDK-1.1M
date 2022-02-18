@@ -75,7 +75,31 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void set_lights(int* lower, int* higher) {
+	if (*lower == 1) HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET);
+	else HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_RESET);
+	if (*higher == 1) HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
+	else HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
+}
 
+void signalize(int* overflow) {
+	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);	
+	HAL_Delay(500);
+	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
+	HAL_Delay(500);
+	
+	for (int j = 0; j < *overflow; j++) {
+		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET);
+		
+		HAL_Delay(500);
+		HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_RESET);
+		
+		HAL_Delay(500);
+	}
+	
+}
 /* USER CODE END 0 */
 
 /**
@@ -106,7 +130,10 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
-
+  int higher = 0;
+ 	int lower = 0;
+	 int overflow = 0;
+	 GPIO_PinState state = GPIO_PIN_SET;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -116,21 +143,46 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-//	  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_13);
-//	  HAL_GPIO_TogglePin(GPIOD, GPIO_PING_13);
-//	  HAL_Delay(1000);
-//	  HAL_Delay(500);
-//	  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_13);
-//	  HAL_Delay(500);
-//	  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
-//	  HAL_Delay(500);
-//	  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
-//	  HAL_Delay(500);
-//	  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_15);
-//	  HAL_Delay(500);
-//	  HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_15);
-//	  HAL_Delay(500);
-  }
+    state = GPIO_PIN_SET;
+		while (state == GPIO_PIN_SET) {
+			state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15);
+		}
+		HAL_Delay(500);
+		state = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15);
+		if (state == GPIO_PIN_SET) {
+			if (lower == 0) {
+				lower = 1;
+				set_lights(&lower, &higher);
+			} else if (higher == 0) {
+				lower = 0;
+				higher = 1;
+				set_lights(&lower, &higher);
+			} else if (higher == 1) {
+				lower = 0;
+				higher = 0;
+				overflow += 1;
+				set_lights(&lower, &higher);
+				HAL_Delay(500);
+				signalize(&overflow);
+			}
+		} else {
+			if (lower == 1) {
+				lower = 0;
+				set_lights(&lower, &higher);
+			} else if (higher == 1) {
+				lower = 1;
+				higher = 0;
+				set_lights(&lower, &higher);
+			} else if (higher == 0) {
+				lower = 1;
+				higher = 1;
+				if (overflow > 0) overflow--;
+				signalize(&overflow);
+				HAL_Delay(500);					
+				set_lights(&lower, &higher);
+			}
+		}
+		HAL_Delay(2000);
   /* USER CODE END 3 */
 }
 
