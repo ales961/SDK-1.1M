@@ -55,7 +55,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define BUFSIZE 64
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -66,7 +66,10 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+int16_t buffer[BUFSIZE];
+int8_t ptr_in = 0;
+int8_t ptr_out = 0;
+int8_t is_interrupt = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -77,7 +80,82 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void buffer_push(int16_t value) {
+    buffer[ptr_in++] = value;
+    if (ptr_in >= BUFSIZE) ptr_in = 0;
+}
 
+int16_t buffer_pop() {
+    int16_t ret = buffer[ptr_out++];
+    if (ptr_out >= BUFSIZE) ptr_out = 0;
+    return ret;
+}
+
+int16_t buffer_get() {
+    return buffer[ptr_out];
+}
+
+void buffer_clear() {
+	ptr_in = 0;
+	ptr_out = 0;
+}
+
+int8_t buffer_elements() {
+    if (ptr_in >= ptr_out)
+        return (ptr_in - ptr_out);
+    else
+        return ((BUFSIZE - ptr_out) + ptr_in);
+}
+
+int8_t is_sign(int16_t value) {
+	if (value == '+' || value == '-' || value == '*' || value == '/') return 1;
+	return 0;
+}
+
+int16_t make_result(int16_t before, int16_t after, char sign) {
+	if (sign == '+') return (int16_t) (before + after);
+	if (sign == '-') return (int16_t) (before - after);
+	if (sign == '*') return (int16_t) (before * after);
+	if (sign == '/') return (int16_t) (before / after);
+	return -1;
+}
+
+void signalyze_error() {
+	HAL_UART_Transmit(&huart6, "error\r\n", 7, 15);
+	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
+	HAL_Delay(2500);
+	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
+}
+
+void toggle_interrupt() {
+	if (is_interrupt == 0) {
+		HAL_NVIC_EnableIRQ(USART6_IRQn);
+		HAL_UART_Transmit_IT(&huart6, "Interrupts enabled\r\n", 20);
+		while( HAL_UART_GetState (&huart6) == HAL_UART_STATE_BUSY_TX ) ;
+		is_interrupt = 1;
+	} else {
+		HAL_NVIC_DisableIRQ(USART6_IRQn);
+		HAL_UART_Transmit(&huart6, "Interrupts disabled\r\n", 21, 30);
+		is_interrupt = 0;
+	}
+}
+
+void transmit(int16_t symbol) {
+	if (is_interrupt == 0) {
+		HAL_UART_Transmit(&huart6, &symbol, 1, 5);
+	} else {
+		HAL_UART_Transmit_IT(&huart6, &symbol, 1);
+		while( HAL_UART_GetState (&huart6) == HAL_UART_STATE_BUSY_TX ) ;
+	}
+}
+
+HAL_StatusTypeDef receive(int16_t symbol) {
+	if (is_interrupt == 0) {
+		return HAL_UART_Receive(&huart6, &symbol, 1, 5);
+	} else {
+		return HAL_UART_Receive_IT(&huart6, &symbol, 1);
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -87,7 +165,13 @@ void SystemClock_Config(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	char txt[] = "Hello world!\n\r";
+	int16_t symbol;
+	int16_t before = 0;
+	int16_t after = 0;
+	int16_t result;
+	int8_t counter = 0;
+	int8_t error_flag = 0;
+	char sign;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -120,8 +204,79 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_UART_Transmit(&huart6, (uint8_t*)txt, sizeof(txt)-1, 100);
-	  HAL_Delay(2000);
+
+
+	  while (1) {
+		counter++;
+	    while (receive(symbol) != HAL_OK) {
+	    	if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15) == GPIO_PIN_RESET) {
+	    		toggle_interrupt();
+	    	}
+	    }
+	    if (symbol >= '0' && symbol <= '9') {
+	    	if (counter > 5) {
+	    		error_flag = 1;
+	    		break;
+	    	}
+	    	buffer_push(symbol);
+	    	before = 10*before + symbol;
+	    	transmit(symbol);
+    	} else if (is_sign(symbol) == 1) {
+	   		buffer_push(symbol);
+	   		sign = symbol;
+	   		transmit(symbol);
+	  		break;
+	    } else {
+	    	error_flag = 1;
+	    	break;
+	    }
+	  }
+
+	  counter = 0;
+	  if (error_flag == 1) {
+		  signalyze_error();
+		  error_flag = 0;
+		  buffer_clear();
+		  continue;
+	  }
+
+	  while (1) {
+	  	counter++;
+	  	while (receive(symbol) != HAL_OK);
+	  	if (symbol >= '0' && symbol <= '9') {
+	  	    if (counter > 5) {
+	  	    	error_flag = 1;
+	  	    	break;
+	  	    }
+	  	    buffer_push(symbol);
+	  	    after = 10*after + symbol;
+	  	    transmit(symbol);
+	     } else if (symbol == '=') {
+	  	   	buffer_push(symbol);
+	  	   	transmit(symbol);
+	  	  	break;
+	  	 } else {
+	  	   	error_flag = 1;
+	      	break;
+	 	 }
+	  }
+
+	  counter = 0;
+	  if (error_flag == 1) {
+	  	signalyze_error();
+	  	error_flag = 0;
+	  	buffer_clear();
+	  	continue;
+	  }
+
+	  result = make_result(before, after, sign);
+	  buffer_push(result);
+	  transmit(result);
+
+	  buffer_clear();
+	  before = 0;
+	  after = 0;
+	  HAL_Delay(100);
   }
   /* USER CODE END 3 */
 }
@@ -135,11 +290,11 @@ void SystemClock_Config(void)
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage 
+  /** Configure the main internal regulator output voltage
   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-  /** Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the CPU, AHB and APB busses clocks
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
@@ -149,7 +304,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the CPU, AHB and APB busses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
@@ -189,7 +344,7 @@ void Error_Handler(void)
   * @retval None
   */
 void assert_failed(uint8_t *file, uint32_t line)
-{ 
+{
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
      tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
