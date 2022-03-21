@@ -70,7 +70,7 @@
 int16_t buffer[BUFSIZE];
 int8_t ptr_in = 0;
 int8_t ptr_out = 0;
-int8_t is_interrupt = 0;
+int8_t is_interrupt = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -169,7 +169,8 @@ HAL_StatusTypeDef receive(int16_t* symbol) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	char symbol;
+	char old_symb = '`';
+	char symbol = '`';
 	int32_t before = 0;
 	int32_t after = 0;
 	int32_t result;
@@ -209,17 +210,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
+	  HAL_NVIC_EnableIRQ(USART6_IRQn);
 
 	  while (1) {
 		counter++;
-	    while (receive(&symbol) != HAL_OK) {
-	    	if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15) == GPIO_PIN_RESET) {
-	    		toggle_interrupt();
-	    		HAL_Delay(500);
-	    		continue;
-	    	}
-	    }
+		old_symb = '`';
+		symbol = '`';
+		while (symbol == old_symb) {
+			HAL_UART_Receive_IT(&huart6, &symbol, 1);
+		}
+		old_symb = symbol;
 	    if (symbol >= '0' && symbol <= '9') {
 	    	if (counter > 5) {
 	    		error_flag = 1;
@@ -254,7 +254,12 @@ int main(void)
 
 	  while (1) {
 	  	counter++;
-	  	while (receive(&symbol) != HAL_OK);
+	  	old_symb = '`';
+	  	symbol = '`';
+	  	while (symbol == old_symb) {
+	  				HAL_UART_Receive_IT(&huart6, &symbol, 1);
+	  			}
+	  	old_symb = symbol;
 	  	if (symbol >= '0' && symbol <= '9') {
 	  	    if (counter > 5) {
 	  	    	error_flag = 1;
