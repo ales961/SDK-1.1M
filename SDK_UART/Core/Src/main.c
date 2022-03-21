@@ -45,7 +45,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdlib.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -107,23 +108,26 @@ int8_t buffer_elements() {
         return ((BUFSIZE - ptr_out) + ptr_in);
 }
 
-int8_t is_sign(int16_t value) {
-	if (value == '+' || value == '-' || value == '*' || value == '/') return 1;
+int8_t is_sign(char symbol) {
+	if (symbol == '+' || symbol == '-' || symbol == '*' || symbol == '/') return 1;
 	return 0;
 }
 
-int16_t make_result(int16_t before, int16_t after, char sign) {
-	if (sign == '+') return (int16_t) (before + after);
-	if (sign == '-') return (int16_t) (before - after);
-	if (sign == '*') return (int16_t) (before * after);
-	if (sign == '/') return (int16_t) (before / after);
+int32_t make_result(int32_t before, int32_t after, char sign) {
+	if (sign == '+') return (int32_t) (before + after);
+	if (sign == '-') return (int32_t) (before - after);
+	if (sign == '*') return (int32_t) (before * after);
+	if (sign == '/') {
+		if (after == 0) return 32768;
+		return (int32_t) (before / after);
+	}
 	return -1;
 }
 
 void signalyze_error() {
 	HAL_UART_Transmit(&huart6, "error\r\n", 7, 15);
 	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_SET);
-	HAL_Delay(2500);
+	HAL_Delay(500);
 	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
 }
 
@@ -140,20 +144,20 @@ void toggle_interrupt() {
 	}
 }
 
-void transmit(int16_t symbol) {
+void transmit(int16_t* symbol, int8_t count) {
 	if (is_interrupt == 0) {
-		HAL_UART_Transmit(&huart6, &symbol, 1, 5);
+		HAL_UART_Transmit(&huart6, symbol, count, 5);
 	} else {
-		HAL_UART_Transmit_IT(&huart6, &symbol, 1);
+		HAL_UART_Transmit_IT(&huart6, symbol, count);
 		while( HAL_UART_GetState (&huart6) == HAL_UART_STATE_BUSY_TX ) ;
 	}
 }
 
-HAL_StatusTypeDef receive(int16_t symbol) {
+HAL_StatusTypeDef receive(int16_t* symbol) {
 	if (is_interrupt == 0) {
-		return HAL_UART_Receive(&huart6, &symbol, 1, 5);
+		return HAL_UART_Receive(&huart6, symbol, 1, 5);
 	} else {
-		return HAL_UART_Receive_IT(&huart6, &symbol, 1);
+		return HAL_UART_Receive_IT(&huart6, symbol, 1);
 	}
 }
 /* USER CODE END 0 */
@@ -165,13 +169,14 @@ HAL_StatusTypeDef receive(int16_t symbol) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	int16_t symbol;
-	int16_t before = 0;
-	int16_t after = 0;
-	int16_t result;
+	char symbol;
+	int32_t before = 0;
+	int32_t after = 0;
+	int32_t result;
 	int8_t counter = 0;
 	int8_t error_flag = 0;
 	char sign;
+	int8_t number = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -208,9 +213,11 @@ int main(void)
 
 	  while (1) {
 		counter++;
-	    while (receive(symbol) != HAL_OK) {
+	    while (receive(&symbol) != HAL_OK) {
 	    	if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15) == GPIO_PIN_RESET) {
 	    		toggle_interrupt();
+	    		HAL_Delay(500);
+	    		continue;
 	    	}
 	    }
 	    if (symbol >= '0' && symbol <= '9') {
@@ -219,12 +226,13 @@ int main(void)
 	    		break;
 	    	}
 	    	buffer_push(symbol);
-	    	before = 10*before + symbol;
-	    	transmit(symbol);
-    	} else if (is_sign(symbol) == 1) {
+	    	number = atoi(&symbol);
+	    	before = 10*before + number;
+	    	transmit(&symbol, 1);
+    	} else if (is_sign(symbol) == 1 && counter > 1) {
 	   		buffer_push(symbol);
 	   		sign = symbol;
-	   		transmit(symbol);
+	   		transmit(&symbol, 1);
 	  		break;
 	    } else {
 	    	error_flag = 1;
@@ -232,28 +240,33 @@ int main(void)
 	    }
 	  }
 
+	  if (before > 32767 || before < -32768) error_flag = 1;
+
 	  counter = 0;
 	  if (error_flag == 1) {
 		  signalyze_error();
 		  error_flag = 0;
 		  buffer_clear();
+		  before = 0;
+		  after = 0;
 		  continue;
 	  }
 
 	  while (1) {
 	  	counter++;
-	  	while (receive(symbol) != HAL_OK);
+	  	while (receive(&symbol) != HAL_OK);
 	  	if (symbol >= '0' && symbol <= '9') {
 	  	    if (counter > 5) {
 	  	    	error_flag = 1;
 	  	    	break;
 	  	    }
 	  	    buffer_push(symbol);
-	  	    after = 10*after + symbol;
-	  	    transmit(symbol);
+	  	    number = atoi(&symbol);
+	  	    after = 10*after + number;
+	  	    transmit(&symbol, 1);
 	     } else if (symbol == '=') {
 	  	   	buffer_push(symbol);
-	  	   	transmit(symbol);
+	  	   	transmit(&symbol, 1);
 	  	  	break;
 	  	 } else {
 	  	   	error_flag = 1;
@@ -261,17 +274,32 @@ int main(void)
 	 	 }
 	  }
 
+	  if (after > 32767 || after < -32768) error_flag = 1;
+
 	  counter = 0;
 	  if (error_flag == 1) {
 	  	signalyze_error();
 	  	error_flag = 0;
 	  	buffer_clear();
+	  	before = 0;
+	  	after = 0;
 	  	continue;
 	  }
 
 	  result = make_result(before, after, sign);
+	  if (result > 32767 || result < -32768) error_flag = 1;
+	  if (error_flag == 1) {
+	  	  signalyze_error();
+	  	  error_flag = 0;
+	  	  buffer_clear();
+	  	  before = 0;
+	  	  after = 0;
+	  	  continue;
+	  }
+	  int16_t* res[50];
+	  sprintf((char*) res, "%d\r\n", result);
 	  buffer_push(result);
-	  transmit(result);
+	  transmit(res, strlen((char*) res));
 
 	  buffer_clear();
 	  before = 0;
@@ -290,11 +318,11 @@ void SystemClock_Config(void)
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage
+  /**Configure the main internal regulator output voltage
   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-  /** Initializes the CPU, AHB and APB busses clocks
+  /**Initializes the CPU, AHB and APB busses clocks
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
@@ -304,7 +332,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Initializes the CPU, AHB and APB busses clocks
+  /**Initializes the CPU, AHB and APB busses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
