@@ -169,7 +169,8 @@ HAL_StatusTypeDef receive(int16_t* symbol) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	char symbol;
+	char old_symb = '`';
+	char symbol = '`';
 	int32_t before = 0;
 	int32_t after = 0;
 	int32_t result;
@@ -213,7 +214,10 @@ int main(void)
 
 	  while (1) {
 		counter++;
-	    while (receive(&symbol) != HAL_OK) {
+		old_symb = '`';
+		symbol = '`';
+	    while (symbol == old_symb) {
+			receive(&symbol);
 	    	if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15) == GPIO_PIN_RESET) {
 	    		toggle_interrupt();
 	    		HAL_Delay(500);
@@ -254,7 +258,11 @@ int main(void)
 
 	  while (1) {
 	  	counter++;
-	  	while (receive(&symbol) != HAL_OK);
+		old_symb = '`';
+	  	symbol = '`';
+	  	while (symbol == old_symb) {
+			receive(&symbol);
+		}
 	  	if (symbol >= '0' && symbol <= '9') {
 	  	    if (counter > 5) {
 	  	    	error_flag = 1;
