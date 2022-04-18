@@ -31,8 +31,6 @@
 #include "pca9538.h"
 #include "oled.h"
 #include "fonts.h"
-#include <string.h>
-#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,26 +57,47 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void KB_Test( int16_t* sec, int16_t* msec, int8_t* enabled );
+void KB_Test( void );
+void OLED_KB( uint8_t OLED_Keys[]);
+void oled_Reset( void );
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define BUFSIZE 64
 
-/* USER CODE END 0 */
-void update_Counter (int16_t* sec, int16_t* msec, int8_t* enabled) {
-	char* time[10];
-	(*msec)++;
-	if (*msec == 10) {
-	*msec = 0;
-		(*sec)++;
-	}
-	sprintf(time, "%d:%d", *sec, *msec);
-	oled_Fill(Black);
-	oled_SetCursor(0,0);
-	oled_WriteString(time, Font_16x26, White);
-	oled_UpdateScreen();
+int8_t buffer[BUFSIZE];
+int8_t ptr_in = 0;
+int8_t ptr_out = 0;
+
+void buffer_push(int8_t value) {
+    buffer[ptr_in++] = value;
+    if (ptr_in >= BUFSIZE) ptr_in = 0;
 }
+
+int8_t buffer_pop() {
+    int8_t ret = buffer[ptr_out++];
+    if (ptr_out >= BUFSIZE) ptr_out = 0;
+    return ret;
+}
+
+int16_t buffer_get() {
+    return buffer[ptr_out];
+}
+
+void buffer_clear() {
+	ptr_in = 0;
+	ptr_out = 0;
+}
+
+int8_t buffer_elements() {
+    if (ptr_in >= ptr_out)
+        return (ptr_in - ptr_out);
+    else
+        return ((BUFSIZE - ptr_out) + ptr_in);
+}
+/* USER CODE END 0 */
+
 /**
   * @brief  The application entry point.
   * @retval int
@@ -113,9 +132,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   oled_Init();
 
-  int16_t sec = 0;
-  int16_t msec = -1;
-  int8_t enabled = 1;
+
+
   /* USER CODE END 2 */
 
 
@@ -128,13 +146,20 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  if (enabled == 1) {
-		  update_Counter(&sec, &msec, &enabled);
-		  KB_Test(&sec, &msec, &enabled);
-	  } else {
-		  KB_Test(&sec, &msec, &enabled);
-		  HAL_Delay(10);
-	  }
+	  
+	  
+	  oled_Fill(Black);
+	  oled_SetCursor(0,0);
+	  oled_WriteString("11111+", Font_11x18, White);
+	  oled_SetCursor(0,20);
+	  oled_WriteString("11111=", Font_11x18, White);
+	  oled_SetCursor(0,40);
+	  oled_WriteString("22222", Font_11x18, White);
+	  oled_UpdateScreen();
+
+	  KB_Test();
+	  HAL_Delay(50);
+
   }
   /* USER CODE END 3 */
 }
@@ -182,28 +207,68 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-void KB_Test( int16_t* sec, int16_t* msec, int8_t* enabled ) {
-	uint8_t Key;
-	Key = Check_Row( ROW4 );
-	if ( Key == 0x02) {
-		if (*enabled == 1) {
-			*enabled = 0;
-			UART_Transmit((uint8_t*)"Stopped\r\n");
-		} else if (*enabled == 0) {
-			*enabled = 1;
-			UART_Transmit((uint8_t*)"Started\r\n" );
+void KB_Test( void ) {
+	uint8_t Row[4] = {ROW1, ROW2, ROW3, ROW4}, Key, OldKey, OLED_Keys[12] = {0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30};
+	//oled_Reset();
+	//oled_WriteString("From bottom to top", Font_7x10, White);
+	//OLED_KB(OLED_Keys);
+	//oled_UpdateScreen();
+	for ( int i = 0; i < 4; i++ ) {
+		OldKey = Key;
+		Key = Check_Row( Row[i] );
+		if ( Key == 0x01 && Key != OldKey) {
+			if (i == 0) {
+				UART_Transmit( (uint8_t*)"3\r\n" );
+			} else if (i == 1) {
+				UART_Transmit( (uint8_t*)"6\r\n" );
+			} else if (i == 2) {
+				UART_Transmit( (uint8_t*)"9\r\n" );
+			} else if (i == 3) {
+				UART_Transmit( (uint8_t*)"enter\r\n" );
+			}
+			//OLED_Keys[2+3*i] = 0x31;
+			//OLED_KB(OLED_Keys);
+		} else if ( Key == 0x02 && Key != OldKey) {
+			if (i == 0) {
+				UART_Transmit( (uint8_t*)"2\r\n" );
+			} else if (i == 1) {
+				UART_Transmit( (uint8_t*)"5\r\n" );
+			} else if (i == 2) {
+				UART_Transmit( (uint8_t*)"8\r\n" );
+			} else if (i == 3) {
+				UART_Transmit( (uint8_t*)"0\r\n" );
+			}
+			//OLED_Keys[1+3*i] = 0x31;
+			//OLED_KB(OLED_Keys);
+		} else if ( Key == 0x04 && Key != OldKey) {
+			if (i == 0) {
+				UART_Transmit( (uint8_t*)"1\r\n" );
+			} else if (i == 1) {
+				UART_Transmit( (uint8_t*)"4\r\n" );
+			} else if (i == 2) {
+				UART_Transmit( (uint8_t*)"7\r\n" );
+			} else if (i == 3) {
+				UART_Transmit( (uint8_t*)"sign\r\n" );
+			}
+			//OLED_Keys[3*i] = 0x31;
+			//OLED_KB(OLED_Keys);
 		}
-		HAL_Delay(200);
-	} else if ( Key == 0x04) {
-		UART_Transmit((uint8_t*)"Reset\r\n");
-		*sec = 0;
-		*msec = -1;
-		if (*enabled == 0) {
-			update_Counter(sec, msec, enabled);
-		}
-		HAL_Delay(100);
+		HAL_Delay(25);
 	}
+}
+void OLED_KB( uint8_t OLED_Keys[12]) {
+	for (int i = 3; i >= 0; i--) {
+		oled_SetCursor(56, 5+(4-i)*10);
+		for (int j = 0; j < 3; j++) {
+			oled_WriteChar(OLED_Keys[j+3*i], Font_7x10, White);
+		}
+	}
+	oled_UpdateScreen();
+}
+void oled_Reset( void ) {
+	oled_Fill(Black);
+	oled_SetCursor(0, 0);
+	oled_UpdateScreen();
 }
 /* USER CODE END 4 */
 
