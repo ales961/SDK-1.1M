@@ -31,6 +31,9 @@
 #include "pca9538.h"
 #include "oled.h"
 #include "fonts.h"
+
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,35 +69,32 @@ void oled_Reset( void );
 /* USER CODE BEGIN 0 */
 #define BUFSIZE 64
 
-int8_t buffer[BUFSIZE];
-int8_t ptr_in = 0;
-int8_t ptr_out = 0;
+int8_t number1 = 0;
+int8_t number2 = 0;
+char* signs[] = {"+", "-", "*", "/"};
+int8_t sign_ptr = -1;
+int8_t part = 0;
+char* string1[6];
+char* string2[6];
+char* string_res[50];
+int8_t number_count = 0;
 
-void buffer_push(int8_t value) {
-    buffer[ptr_in++] = value;
-    if (ptr_in >= BUFSIZE) ptr_in = 0;
+
+void show_error() {
+	oled_Fill(Black);
+	oled_SetCursor(0,0);
+	oled_WriteString("error", Font_11x18, White);
+	oled_UpdateScreen();
+	number_count = 0;
+	number1 = 0;
+	number2 = 0;
+	part = 0;
+	sign_ptr = -1;
 }
 
-int8_t buffer_pop() {
-    int8_t ret = buffer[ptr_out++];
-    if (ptr_out >= BUFSIZE) ptr_out = 0;
-    return ret;
-}
-
-int16_t buffer_get() {
-    return buffer[ptr_out];
-}
-
-void buffer_clear() {
-	ptr_in = 0;
-	ptr_out = 0;
-}
-
-int8_t buffer_elements() {
-    if (ptr_in >= ptr_out)
-        return (ptr_in - ptr_out);
-    else
-        return ((BUFSIZE - ptr_out) + ptr_in);
+int8_t is_sign(char symbol) {
+	if (symbol == '+' || symbol == '-' || symbol == '*' || symbol == '/') return 1;
+	return 0;
 }
 /* USER CODE END 0 */
 
@@ -132,8 +132,6 @@ int main(void)
   /* USER CODE BEGIN 2 */
   oled_Init();
 
-
-
   /* USER CODE END 2 */
 
 
@@ -146,19 +144,30 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  
-	  
-	  oled_Fill(Black);
-	  oled_SetCursor(0,0);
-	  oled_WriteString("11111+", Font_11x18, White);
-	  oled_SetCursor(0,20);
-	  oled_WriteString("11111=", Font_11x18, White);
-	  oled_SetCursor(0,40);
-	  oled_WriteString("22222", Font_11x18, White);
-	  oled_UpdateScreen();
 
-	  KB_Test();
-	  HAL_Delay(50);
+	  while (part == 0) {
+		  KB_Test();
+		  if (sign_ptr != -1) number_count = 5;
+		  if (number_count > 5) {
+			  show_error();
+			  break;
+		  }
+	  }
+
+	  number_count = 0;
+
+	  while (part == 1) {
+		  KB_Test();
+		  if (number_count > 5) {
+			  show_error();
+			  break;
+		  }
+	  }
+
+	  number_count = 0;
+	  number1 = 0;
+	  number2 = 0;
+	  sign_ptr = -1;
 
   }
   /* USER CODE END 3 */
@@ -208,46 +217,267 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 void KB_Test( void ) {
-	uint8_t Row[4] = {ROW1, ROW2, ROW3, ROW4}, Key, OldKey, OLED_Keys[12] = {0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30};
+	uint8_t Row[4] = {ROW1, ROW2, ROW3, ROW4}, Key, OLED_Keys[12] = {0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30};
 	//oled_Reset();
 	//oled_WriteString("From bottom to top", Font_7x10, White);
 	//OLED_KB(OLED_Keys);
 	//oled_UpdateScreen();
 	for ( int i = 0; i < 4; i++ ) {
-		OldKey = Key;
 		Key = Check_Row( Row[i] );
-		if ( Key == 0x01 && Key != OldKey) {
+		if ( Key == 0x01 ) {
 			if (i == 0) {
-				UART_Transmit( (uint8_t*)"3\r\n" );
+				if (part == 0) {
+					number1 = number1*10 + 3;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				} else if (part == 1) {
+					number2 = number2*10 + 3;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				}
 			} else if (i == 1) {
-				UART_Transmit( (uint8_t*)"6\r\n" );
+				if (part == 0) {
+					number1 = number1*10 + 6;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				} else if (part == 1) {
+					number2 = number2*10 + 6;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				}
 			} else if (i == 2) {
-				UART_Transmit( (uint8_t*)"9\r\n" );
+				if (part == 0) {
+					number1 = number1*10 + 9;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				} else if (part == 1) {
+					number2 = number2*10 + 9;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				}
 			} else if (i == 3) {
+				if (part == 0) {
+					if (sign_ptr != -1) {
+						part = 1;
+						oled_SetCursor(20,0);
+						oled_WriteString("0", Font_11x18, White);
+						oled_UpdateScreen();
+					}
+				} else if (part == 1) {
+					switch (sign_ptr) {
+					case 0:
+						sprintf(string_res, "%d", number1+number2);
+						break;
+					case 2:
+						sprintf(string_res, "%d", number1-number2);
+						break;
+					case 3:
+						sprintf(string_res, "%d", number1*number2);
+						break;
+					case 4:
+						sprintf(string_res, "%d", number1/number2);
+						break;
+					}
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					sprintf(string2, "%d=", number2);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_SetCursor(40,0);
+					oled_WriteString(string_res, Font_11x18, White);
+					oled_UpdateScreen();
+					part = 0;
+				}
 				UART_Transmit( (uint8_t*)"enter\r\n" );
 			}
 			//OLED_Keys[2+3*i] = 0x31;
 			//OLED_KB(OLED_Keys);
-		} else if ( Key == 0x02 && Key != OldKey) {
+		} else if ( Key == 0x02 ) {
 			if (i == 0) {
-				UART_Transmit( (uint8_t*)"2\r\n" );
+				if (part == 0) {
+					number1 = number1*10 + 2;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				} else if (part == 1) {
+					number2 = number2*10 + 2;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				}
 			} else if (i == 1) {
-				UART_Transmit( (uint8_t*)"5\r\n" );
+				if (part == 0) {
+					number1 = number1*10 + 5;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				} else if (part == 1) {
+					number2 = number2*10 + 5;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				}
 			} else if (i == 2) {
-				UART_Transmit( (uint8_t*)"8\r\n" );
+				if (part == 0) {
+					number1 = number1*10 + 8;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				} else if (part == 1) {
+					number2 = number2*10 + 8;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				}
 			} else if (i == 3) {
-				UART_Transmit( (uint8_t*)"0\r\n" );
+				if (part == 0) {
+					number1 = number1*10;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					if (number1 != 0) number_count++;
+				} else if (part == 1) {
+					number2 = number2*10;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					if (number2 != 0) number_count++;
+				}
 			}
 			//OLED_Keys[1+3*i] = 0x31;
 			//OLED_KB(OLED_Keys);
-		} else if ( Key == 0x04 && Key != OldKey) {
+		} else if ( Key == 0x04 ) {
 			if (i == 0) {
-				UART_Transmit( (uint8_t*)"1\r\n" );
+				if (part == 0) {
+					number1 = number1*10 + 1;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				} else if (part == 1) {
+					number2 = number2*10 + 1;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				}
 			} else if (i == 1) {
-				UART_Transmit( (uint8_t*)"4\r\n" );
+				if (part == 0) {
+					number1 = number1*10 + 4;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				} else if (part == 1) {
+					number2 = number2*10 + 4;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				}
 			} else if (i == 2) {
-				UART_Transmit( (uint8_t*)"7\r\n" );
+				if (part == 0) {
+					number1 = number1*10 + 7;
+					sprintf(string1, "%d", number1);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				} else if (part == 1) {
+					number2 = number2*10 + 7;
+					sprintf(string2, "%d", number2);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_SetCursor(20,0);
+					oled_WriteString(string2, Font_11x18, White);
+					oled_UpdateScreen();
+					number_count++;
+				}
 			} else if (i == 3) {
+				if (part == 0) {
+					sign_ptr++;
+					if (sign_ptr > 3) sign_ptr = 0;
+					sprintf (string1, "%d%s", number1, signs[sign_ptr]);
+					oled_Fill(Black);
+					oled_SetCursor(0,0);
+					oled_WriteString(string1, Font_11x18, White);
+					oled_UpdateScreen();
+				}
 				UART_Transmit( (uint8_t*)"sign\r\n" );
 			}
 			//OLED_Keys[3*i] = 0x31;
