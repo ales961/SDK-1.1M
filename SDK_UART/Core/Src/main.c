@@ -70,7 +70,6 @@
 int16_t buffer[BUFSIZE];
 int8_t ptr_in = 0;
 int8_t ptr_out = 0;
-int8_t is_interrupt = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -131,34 +130,12 @@ void signalyze_error() {
 	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_15, GPIO_PIN_RESET);
 }
 
-void toggle_interrupt() {
-	if (is_interrupt == 0) {
-		HAL_NVIC_EnableIRQ(USART6_IRQn);
-		HAL_UART_Transmit_IT(&huart6, "Interrupts enabled\r\n", 20);
-		while( HAL_UART_GetState (&huart6) == HAL_UART_STATE_BUSY_TX ) ;
-		is_interrupt = 1;
-	} else {
-		HAL_NVIC_DisableIRQ(USART6_IRQn);
-		HAL_UART_Transmit(&huart6, "Interrupts disabled\r\n", 21, 30);
-		is_interrupt = 0;
-	}
-}
-
 void transmit(int16_t* symbol, int8_t count) {
-	if (is_interrupt == 0) {
-		HAL_UART_Transmit(&huart6, symbol, count, 5);
-	} else {
-		HAL_UART_Transmit_IT(&huart6, symbol, count);
-		while( HAL_UART_GetState (&huart6) == HAL_UART_STATE_BUSY_TX ) ;
-	}
+	HAL_UART_Transmit(&huart6, symbol, count, 5);
 }
 
 HAL_StatusTypeDef receive(int16_t* symbol) {
-	if (is_interrupt == 0) {
-		return HAL_UART_Receive(&huart6, symbol, 1, 5);
-	} else {
-		return HAL_UART_Receive_IT(&huart6, symbol, 1);
-	}
+	return HAL_UART_Receive(&huart6, symbol, 1, 5);
 }
 /* USER CODE END 0 */
 
@@ -169,8 +146,7 @@ HAL_StatusTypeDef receive(int16_t* symbol) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	char old_symb = '`';
-	char symbol = '`';
+	char symbol;
 	int32_t before = 0;
 	int32_t after = 0;
 	int32_t result;
@@ -214,16 +190,7 @@ int main(void)
 
 	  while (1) {
 		counter++;
-		old_symb = '`';
-		symbol = '`';
-	    while (symbol == old_symb) {
-			receive(&symbol);
-	    	if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_15) == GPIO_PIN_RESET) {
-	    		toggle_interrupt();
-	    		HAL_Delay(500);
-	    		continue;
-	    	}
-	    }
+	    while (receive(&symbol) != HAL_OK);
 	    if (symbol >= '0' && symbol <= '9') {
 	    	if (counter > 5) {
 	    		error_flag = 1;
@@ -258,11 +225,7 @@ int main(void)
 
 	  while (1) {
 	  	counter++;
-		old_symb = '`';
-	  	symbol = '`';
-	  	while (symbol == old_symb) {
-			receive(&symbol);
-		}
+	  	while (receive(&symbol) != HAL_OK);
 	  	if (symbol >= '0' && symbol <= '9') {
 	  	    if (counter > 5) {
 	  	    	error_flag = 1;
