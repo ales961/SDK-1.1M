@@ -69,14 +69,14 @@ void oled_Reset( void );
 /* USER CODE BEGIN 0 */
 #define BUFSIZE 64
 
-int8_t number1 = 0;
-int8_t number2 = 0;
+int32_t number1 = 0;
+int32_t number2 = 0;
 char* signs[] = {"+", "-", "*", "/"};
 int8_t sign_ptr = -1;
 int8_t part = 0;
-char* string1[6];
-char* string2[6];
-char* string_res[50];
+char string1[6];
+char string2[6];
+char string_res[50];
 int8_t number_count = 0;
 
 
@@ -138,20 +138,26 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  int number_1;
+  int number_2;
+  int nc;
+
   while (1)
   {
-
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
 	  while (part == 0) {
+		  number_1 = number1;
+		  number_2 = number2;
+		  nc = number_count;
 		  KB_Test();
-		  if (sign_ptr != -1) number_count = 5;
 		  if (number_count > 5) {
 			  show_error();
 			  break;
 		  }
+		  if (sign_ptr != -1) number_count = 5;
 	  }
 
 	  number_count = 0;
@@ -217,12 +223,23 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 void KB_Test( void ) {
-	uint8_t Row[4] = {ROW1, ROW2, ROW3, ROW4}, Key, OLED_Keys[12] = {0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30};
+	uint8_t Row[4] = {ROW1, ROW2, ROW3, ROW4}, Key, OldKey, OLED_Keys[12] = {0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30};
 	//oled_Reset();
 	//oled_WriteString("From bottom to top", Font_7x10, White);
 	//OLED_KB(OLED_Keys);
 	//oled_UpdateScreen();
+	Key = Check_Row( Row[0] );
 	for ( int i = 0; i < 4; i++ ) {
+		OldKey = Key;
+		Key = Check_Row( Row[i] );
+		Key = Check_Row( Row[i] );
+		Key = Check_Row( Row[i] );
+		Key = Check_Row( Row[i] );
+		Key = Check_Row( Row[i] );
+		Key = Check_Row( Row[i] );
+		Key = Check_Row( Row[i] );
+		Key = Check_Row( Row[i] );
+		Key = Check_Row( Row[i] );
 		Key = Check_Row( Row[i] );
 		if ( Key == 0x01 ) {
 			if (i == 0) {
@@ -240,7 +257,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					number_count++;
@@ -260,7 +277,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					number_count++;
@@ -280,7 +297,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					number_count++;
@@ -289,35 +306,60 @@ void KB_Test( void ) {
 				if (part == 0) {
 					if (sign_ptr != -1) {
 						part = 1;
-						oled_SetCursor(20,0);
+						oled_SetCursor(0,20);
 						oled_WriteString("0", Font_11x18, White);
 						oled_UpdateScreen();
 					}
 				} else if (part == 1) {
+					int64_t res;
+					int64_t n1 = number1;
+					int64_t n2 = number2;
 					switch (sign_ptr) {
 					case 0:
+						res = n1+n2;
+						if (res > 2147483647 || res < -2147483648) {
+							show_error();
+							break;
+						}
 						sprintf(string_res, "%d", number1+number2);
 						break;
-					case 2:
+					case 1:
+						res = n1-n2;
+						if (res > 2147483647 || res < -2147483648) {
+							show_error();
+							break;
+						}
 						sprintf(string_res, "%d", number1-number2);
 						break;
-					case 3:
+					case 2:
+						res = n1*n2;
+						if (res > 2147483647 || res < -2147483648) {
+							show_error();
+							break;
+						}
 						sprintf(string_res, "%d", number1*number2);
 						break;
-					case 4:
+					case 3:
+						res = n1/n2;
+						if (res > 2147483647 || res < -2147483648) {
+							show_error();
+							break;
+						}
 						sprintf(string_res, "%d", number1/number2);
 						break;
 					}
-					oled_Fill(Black);
-					oled_SetCursor(0,0);
-					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
-					sprintf(string2, "%d=", number2);
-					oled_WriteString(string2, Font_11x18, White);
-					oled_SetCursor(40,0);
-					oled_WriteString(string_res, Font_11x18, White);
-					oled_UpdateScreen();
-					part = 0;
+					if (part == 1) {
+						oled_Fill(Black);
+						oled_SetCursor(0,0);
+						oled_WriteString(string1, Font_11x18, White);
+						oled_SetCursor(0,20);
+						sprintf(string2, "%d=", number2);
+						oled_WriteString(string2, Font_11x18, White);
+						oled_SetCursor(0,40);
+						oled_WriteString(string_res, Font_11x18, White);
+						oled_UpdateScreen();
+						part = 0;
+					}
 				}
 				UART_Transmit( (uint8_t*)"enter\r\n" );
 			}
@@ -339,7 +381,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					number_count++;
@@ -359,7 +401,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					number_count++;
@@ -379,7 +421,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					number_count++;
@@ -399,7 +441,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					if (number2 != 0) number_count++;
@@ -423,7 +465,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					number_count++;
@@ -443,7 +485,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					number_count++;
@@ -463,7 +505,7 @@ void KB_Test( void ) {
 					oled_Fill(Black);
 					oled_SetCursor(0,0);
 					oled_WriteString(string1, Font_11x18, White);
-					oled_SetCursor(20,0);
+					oled_SetCursor(0,20);
 					oled_WriteString(string2, Font_11x18, White);
 					oled_UpdateScreen();
 					number_count++;
@@ -483,8 +525,8 @@ void KB_Test( void ) {
 			//OLED_Keys[3*i] = 0x31;
 			//OLED_KB(OLED_Keys);
 		}
-		HAL_Delay(25);
 	}
+	HAL_Delay(200);
 }
 void OLED_KB( uint8_t OLED_Keys[12]) {
 	for (int i = 3; i >= 0; i--) {
